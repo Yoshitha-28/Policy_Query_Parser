@@ -16,18 +16,19 @@ A semantic search tool that lets you upload policy documents (PDF/DOCX) and ask 
 
 ## 📁 Project Structure
 
-Policy_Query_Parser/
-├── embed_and_index.py        # Downloads and indexes document embeddings
-├── query_retriever.py        # Retrieves the most relevant chunk for a question
-├── utils.py                  # Helper functions (text splitter, file downloader)
-├── faiss.index               # FAISS index file (generated)
-├── chunks.pkl                # Pickled text chunks (generated)
-├── requirements.txt          # Project dependencies
-├── .env                      # API keys (not pushed to GitHub)
-├── .gitignore                # Prevents sensitive & unnecessary files from being pushed
-├── README.md                 # Project documentation
-└── venv/                     # Python virtual environment (not pushed)
-
+```bash
+Policy_Query_Parser/ <br>
+├── embed_and_index.py        # Downloads and indexes document embeddings<br>
+├── query_retriever.py        # Retrieves the most relevant chunk for a question<br>
+├── utils.py                  # Helper functions (text splitter, file downloader)<br>
+├── faiss.index               # FAISS index file (generated)<br>
+├── chunks.pkl                # Pickled text chunks (generated)<br>
+├── requirements.txt          # Project dependencies<br>
+├── .env                      # API keys (not pushed to GitHub)<br>
+├── .gitignore                # Prevents sensitive & unnecessary files from being pushed<br>
+├── README.md                 # Project documentation<br>
+└── venv/                     # Python virtual environment (not pushed)<br>
+```
 
 ---
 
