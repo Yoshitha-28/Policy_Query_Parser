@@ -11,11 +11,6 @@ from sentence_transformers import SentenceTransformer
 load_dotenv()
 api_key = os.getenv("OPENROUTER_API_KEY")
 
-headers = {
-    "Authorization": f"Bearer {api_key}",
-    "HTTP-Referer": "https://github.com/Yoshitha-28/Policy_Query_Parser",  # Replace with your domain or GitHub repo if needed
-}
-
 # Download and extract text
 def download_and_extract(blob_url):
     filename = blob_url.split("?")[0].split("/")[-1]
