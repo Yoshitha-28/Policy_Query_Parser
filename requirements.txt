@@ -1,19 +1,21 @@
-# Core
-fastapi==0.111.0
-uvicorn==0.30.0
-python-dotenv==1.0.1
+# Web Framework
+fastapi
+uvicorn[standard]
 
-# Document parsing
-PyPDF2==3.0.1
-python-docx==1.1.0
+# LLM and AI
+google-generativeai
+sentence-transformers
 
-# Embedding and Semantic Search
-sentence-transformers==2.6.1
-faiss-cpu==1.7.4
+# Vector Database
+faiss-cpu
+numpy
 
-# OpenAI (for GPT-based answering)
-openai==1.33.0
+# Database
+pymongo
 
 # Utilities
-requests==2.31.0
-tqdm==4.66.4
+python-dotenv
+python-docx
+requests
+PyPDF2
+pydantic

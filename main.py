@@ -1,41 +1,43 @@
-# main.py
 import os
 import pickle
 import faiss
 import numpy as np
 import requests
-from PyPDF2 import PdfReader
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
 from fastapi.middleware.cors import CORSMiddleware
-from io import BytesIO
-import google.generativeai as genai
 from dotenv import load_dotenv
+from datetime import datetime      # MONGO: Import for timestamps
+from pymongo import MongoClient    # MONGO: Import the MongoDB client
 
-# Load environment variables
+# Import functions from the other files
+from embed_and_index import create_faiss_index_from_url
+from retriever_with_llm import load_index_and_chunks, retrieve_context, ask_gemini_gpt
+
+# --- Initial Setup ---
 load_dotenv(".env")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-if not GEMINI_API_KEY:
-    raise ValueError("❌ GEMINI_API_KEY not found in .env")
+# MONGO: Set up MongoDB connection
+try:
+    MONGO_URI = os.getenv("MONGO_CONNECTION_STRING")
+    mongo_client = MongoClient(MONGO_URI)
+    db = mongo_client.get_database("hackrx_db")
+    query_history_collection = db.get_collection("query_history")
+    print("✅ Successfully connected to MongoDB.")
+except Exception as e:
+    print(f"⚠️  Could not connect to MongoDB. Logging will be disabled. Error: {e}")
+    mongo_client = None
 
-# Initialize Gemini client
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
 
-# Models
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
-# Load FAISS index and chunks
+# --- FAISS Index and Chunks Setup ---
 INDEX_PATH = "data/index.faiss"
 CHUNKS_PATH = "data/chunks.pkl"
 
-index = faiss.read_index(INDEX_PATH)
-with open(CHUNKS_PATH, "rb") as f:
-    chunks = pickle.load(f)
+index = None
+chunks = None
+last_indexed_url = None
 
-# FastAPI setup
+# --- FastAPI App Setup ---
 app = FastAPI()
 
 app.add_middleware(
@@ -46,65 +48,66 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request schema
+# --- Pydantic Models ---
 class RunRequest(BaseModel):
     documents: str
     questions: list[str]
 
-# Helper: extract text from PDF URL
-def extract_text_from_pdf_url(pdf_url: str) -> str:
-    response = requests.get(pdf_url)
-    if response.status_code != 200:
-        raise HTTPException(status_code=400, detail="Unable to fetch PDF")
-    pdf = PdfReader(BytesIO(response.content))
-    text = ""
-    for page in pdf.pages:
-        text += page.extract_text() + "\n"
-    return text
-
-# Embed text into a vector
-def embed_text(text: str) -> np.ndarray:
-    return np.array(embedding_model.encode([text])[0], dtype=np.float32)
-
-# Retrieve top-k chunks from FAISS
-def retrieve_top_chunks(query: str, k: int = 5):
-    query_vec = embed_text(query)
-    D, I = index.search(np.array([query_vec]), k)
-    return [chunks[i] for i in I[0]]
-
-# Ask Gemini using context
-def ask_gemini(query: str, context_chunks: list[str]) -> str:
-    context = "\n\n".join(context_chunks)
-    prompt = f"""You are a helpful assistant. Use the following context to answer the question.
-    Ensure your response is concise and directly answers the question based on the provided context.
-
-Context:
-{context}
-
-Question:
-{query}
-
-Answer:"""
-
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini API error: {str(e)}")
-
-# Endpoint
+# --- API Endpoint ---
 @app.post("/api/v1/run")
 def run_query(request: RunRequest):
+    global index, chunks, last_indexed_url
+
+    # Check if the document URL has changed or if the index files don't exist
+    if request.documents != last_indexed_url or not os.path.exists(INDEX_PATH) or not os.path.exists(CHUNKS_PATH):
+        print(f"📄 New document URL or index not found. Rebuilding index for: {request.documents}")
+        try:
+            create_faiss_index_from_url(request.documents)
+            print("✅ Index created successfully.")
+            last_indexed_url = request.documents
+            index, chunks = load_index_and_chunks(INDEX_PATH, CHUNKS_PATH)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create or load FAISS index: {str(e)}")
+    else:
+        # If the URL is the same, ensure the index is loaded into memory
+        if index is None or chunks is None:
+            print(f"✅ Index for {last_indexed_url} found on disk. Loading into memory.")
+            try:
+                index, chunks = load_index_and_chunks(INDEX_PATH, CHUNKS_PATH)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to load FAISS index: {str(e)}")
+
+    # Proceed with the query using the loaded index and chunks
     try:
-        # We'll store the direct string answers here, not a list of dictionaries
         answers = []
+        # MONGO: Prepare a list to hold records for batch insertion
+        records_to_insert = []
+
         for question in request.questions:
-            top_chunks = retrieve_top_chunks(question, k=5)
-            answer_text = ask_gemini(question, top_chunks)
-            # Append only the answer string to the list
+            top_chunks = retrieve_context(question, index, chunks, k=5)
+            context = "\n\n".join(top_chunks)
+            answer_text = ask_gemini_gpt(question, context)
             answers.append(answer_text)
 
-        # Return the final dictionary with the "answers" key
+            # MONGO: Create a log record for each question-answer pair
+            if mongo_client:
+                log_record = {
+                    "document_url": request.documents,
+                    "question": question,
+                    "answer": answer_text,
+                    "retrieved_context": top_chunks,
+                    "created_at": datetime.utcnow()
+                }
+                records_to_insert.append(log_record)
+
+        # MONGO: Insert all records into the database at once after the loop
+        if records_to_insert:
+            try:
+                query_history_collection.insert_many(records_to_insert)
+                print(f"✅ Logged {len(records_to_insert)} records to MongoDB.")
+            except Exception as e:
+                print(f"❌ Failed to log records to MongoDB: {e}")
+
         return {
             "answers": answers
         }
