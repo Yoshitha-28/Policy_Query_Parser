@@ -4,7 +4,7 @@ A semantic search tool that lets you upload policy documents (PDF/DOCX) and ask 
 
 ---
 
-## ✨ Features
+## Features
 
 * **Accepts remote files:** Supports PDF and DOCX documents from Azure Blob URLs.
 * **OpenRouter embeddings:** Leverages a powerful language model for semantic understanding.
@@ -86,7 +86,7 @@ You'll be prompted to enter your question. The script will:
 - Return the best-matching text as the answer context.
 
 ## 🧪 Requirements
-Python 3.8+
+Python 3.8 Plus
 
 See requirements.txt for a complete list of dependencies.
 
