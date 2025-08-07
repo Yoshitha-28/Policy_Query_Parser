@@ -1,97 +1,86 @@
-# 🧠 Policy_Query_Parser
+# Policy Query Parser
+A semantic search tool that lets you upload policy documents (PDF, DOCX, TXT, EML) and ask natural language questions about them. This project uses Sentence-Transformers for embeddings and FAISS for efficient semantic search, allowing you to quickly retrieve relevant information from policy files.
 
-A semantic search tool that lets you upload policy documents (PDF/DOCX) and ask natural language questions about them. This project uses **OpenRouter embeddings** and **FAISS** for efficient semantic search, allowing you to quickly retrieve relevant information from insurance documents and other policy files.
+### Features
+-  Diverse document types: Supports PDF, DOCX, TXT, and EML documents from any URL.
+-  Gemini-powered Q&A: Uses the Gemini API for natural language understanding and generating concise answers based on document context.
+-  FAISS similarity search: Employs a highly efficient library for finding the most relevant text chunks.
+-  Dynamic indexing: Automatically downloads, chunks, and indexes documents on the fly when a new document URL is provided via the API.
+-  FastAPI server: Provides a RESTful API endpoint for seamless integration with other applications.
 
----
-
-## Features
-
-* **Accepts remote files:** Supports PDF and DOCX documents from Azure Blob URLs.
-* **OpenRouter embeddings:** Leverages a powerful language model for semantic understanding.
-* **FAISS similarity search:** Uses a highly efficient library for finding the most relevant text chunks.
-* **Persistent storage:** Stores indexed documents so you don't have to re-index them for future queries.
-* **Easy-to-use CLI:** A straightforward command-line interface for indexing and querying.
-
----
-
-## 📁 Project Structure
-
+### Project Structure
 ```bash
-Policy_Query_Parser/ <br>
-├── embed_and_index.py        # Downloads and indexes document embeddings<br>
-├── query_retriever.py        # Retrieves the most relevant chunk for a question<br>
-├── utils.py                  # Helper functions (text splitter, file downloader)<br>
-├── faiss.index               # FAISS index file (generated)<br>
-├── chunks.pkl                # Pickled text chunks (generated)<br>
-├── requirements.txt          # Project dependencies<br>
-├── .env                      # API keys (not pushed to GitHub)<br>
-├── .gitignore                # Prevents sensitive & unnecessary files from being pushed<br>
-├── README.md                 # Project documentation<br>
-└── venv/                     # Python virtual environment (not pushed)<br>
+Policy_Query_Parser/
+├── main.py                     # The FastAPI application entry point
+├── embed_and_index.py          # Handles downloading, parsing, and indexing documents
+├── retriever_with_llm.py       # Manages context retrieval and LLM interaction
+├── data/                       # Directory for generated files
+  ├── faiss.index             # FAISS index file (generated)
+  └── chunks.pkl              # Pickled text chunks (generated)
+├── requirements.txt            # Project dependencies
+├── .env                        # API keys (DO NOT push to GitHub)
+├── .gitignore                  # Prevents sensitive & unnecessary files from being pushed
+├── README.md                   # Project documentation
+└── venv/                       # Python virtual environment
 ```
 
----
-
-## 🚀 Setup Instructions
-
-### 1. Clone the Repository
-
+### Setup & Deployment Instructions
+#### 1. Clone the Repository
 ```bash
-git clone [https://github.com/Yoshitha-28/Policy_Query_Parser.git](https://github.com/Yoshitha-28/Policy_Query_Parser.git)
+git clone https://github.com/Yoshitha-28/Policy_Query_Parser.git
 cd Policy_Query_Parser
 ```
 
-### 2. Create and Activate a Virtual Environment
-It's highly recommended to use a virtual environment to manage project dependencies.
+#### 2. Create and Activate a Virtual Environment
 ```bash
 python -m venv venv
+# On Windows:
 venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
 ```
-
-### 3. Create a .env File
-Create a file named .env in the root of the project and add your OpenRouter API key.
+#### 3. Create a .env File
+Create a file named .env in the root of the project and add your Gemini API key.
 ```bash
-OPENROUTER_API_KEY=your_api_key_here
+GEMINI_API_KEY=your_api_key_here
 ```
-🔐 Do NOT share this key or commit your .env file to GitHub. It's already included in .gitignore.
+Do NOT share this key or commit your .env file to GitHub.
 
-### 4. Install Required Libraries
+#### 4. Install Required Libraries
 Install all necessary packages from the requirements.txt file.
+
 ```bash
 pip install -r requirements.txt
 ```
-## 📄 How to Use
-### Step 1: Embed and Index a Document
-Run the embed_and_index.py script and provide a direct URL to your PDF or DOCX file (e.g., an Azure Blob URL).
+
+#### 5. Run the FastAPI Server
+Start the application using Uvicorn. This will make your API available locally at http://localhost:8000.
 ```bash
-python embed_and_index.py
+uvicorn main:app --reload
 ```
-The script will prompt you to paste the URL. It will then:
-- Download the file.
-- Split the text into manageable chunks.
-- Generate vector embeddings for each chunk using OpenRouter.
-- Save a faiss.index file and a chunks.pkl file for future queries.
-
-ℹ️ You can index multiple documents without overwriting previous ones.
-
-### Step 2: Ask a Question
-Once a document is indexed, you can run the query_retriever.py script to ask a question.
-
+How to Use the API
+Once the server is running, you can send a POST request to the API to index a document and ask questions.
 ```bash
-python query_retriever.py
+Endpoint: http://localhost:8000/api/v1/run
+
+Request Body (JSON):
+
+{
+  "documents": "https://example.com/path/to/your/document.pdf",
+  "questions": [
+    "What is the policy on late payments?",
+    "How do I file a claim?"
+  ]
+}
 ```
-You'll be prompted to enter your question. The script will:
-- Load the stored FAISS index and text chunks.
-- Find the most relevant chunk based on your question.
-- Return the best-matching text as the answer context.
+The first time you call the API with a new documents URL, the system will download, process, and index the file. This may take some time.
 
-## 🧪 Requirements
-Python 3.8 Plus
+Subsequent requests with the same URL will use the existing index, resulting in much faster responses.
 
-See requirements.txt for a complete list of dependencies.
+You can include multiple questions in a single request, and the API will return a concise answer for each.
 
-## 🧑‍💻 Author
+### Author
 Yoshitha Maddineni
 
-## 📜 License
+### License
 This project is licensed under the MIT License.
