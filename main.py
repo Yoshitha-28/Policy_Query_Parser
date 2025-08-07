@@ -1,60 +1,112 @@
 # main.py
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+import os
+import pickle
+import faiss
+import numpy as np
+import requests
+from PyPDF2 import PdfReader
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List
-import subprocess
-import traceback
+from sentence_transformers import SentenceTransformer
+from fastapi.middleware.cors import CORSMiddleware
+from io import BytesIO
+import google.generativeai as genai
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv(".env")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    raise ValueError("❌ GEMINI_API_KEY not found in .env")
+
+# Initialize Gemini client
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
+
+# Models
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Load FAISS index and chunks
+INDEX_PATH = "data/index.faiss"
+CHUNKS_PATH = "data/chunks.pkl"
+
+index = faiss.read_index(INDEX_PATH)
+with open(CHUNKS_PATH, "rb") as f:
+    chunks = pickle.load(f)
+
+# FastAPI setup
 app = FastAPI()
 
-# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class QueryInput(BaseModel):
-    documents: str  # URL to the policy PDF
-    questions: List[str]
+# Request schema
+class RunRequest(BaseModel):
+    documents: str
+    questions: list[str]
 
-@app.post("/api/v1/run")
-async def run_query(request: Request):
+# Helper: extract text from PDF URL
+def extract_text_from_pdf_url(pdf_url: str) -> str:
+    response = requests.get(pdf_url)
+    if response.status_code != 200:
+        raise HTTPException(status_code=400, detail="Unable to fetch PDF")
+    pdf = PdfReader(BytesIO(response.content))
+    text = ""
+    for page in pdf.pages:
+        text += page.extract_text() + "\n"
+    return text
+
+# Embed text into a vector
+def embed_text(text: str) -> np.ndarray:
+    return np.array(embedding_model.encode([text])[0], dtype=np.float32)
+
+# Retrieve top-k chunks from FAISS
+def retrieve_top_chunks(query: str, k: int = 5):
+    query_vec = embed_text(query)
+    D, I = index.search(np.array([query_vec]), k)
+    return [chunks[i] for i in I[0]]
+
+# Ask Gemini using context
+def ask_gemini(query: str, context_chunks: list[str]) -> str:
+    context = "\n\n".join(context_chunks)
+    prompt = f"""You are a helpful assistant. Use the following context to answer the question.
+    Ensure your response is concise and directly answers the question based on the provided context.
+
+Context:
+{context}
+
+Question:
+{query}
+
+Answer:"""
+
     try:
-        data = await request.json()
-        print("📥 Incoming JSON data:", data)
-
-        blob_url = data.get("documents")
-        questions = data.get("questions")
-
-        print("🔗 Blob URL:", blob_url)
-        print("❓ Questions:", questions)
-
-        if not blob_url or not questions:
-            raise ValueError("Both 'documents' and 'questions' are required in the request.")
-
-        # 🚀 Run embed_and_index.py as a subprocess
-        print("📦 Running embed_and_index.py...")
-        result = subprocess.run(
-            ["python", "embed_and_index.py", blob_url],
-            capture_output=True,
-            text=True
-        )
-
-        if result.returncode != 0:
-            print("❌ embed_and_index.py failed:")
-            print(result.stderr)
-            raise RuntimeError("Embedding & indexing failed")
-
-        print("✅ embed_and_index.py ran successfully")
-
-        # ➡️ At this point, index.faiss and chunks.pkl should be ready for retriever_with_llm.py
-
-        return {"message": "Document processed. Proceed to querying with retriever_with_llm.py."}
-
+        response = model.generate_content(prompt)
+        return response.text.strip()
     except Exception as e:
-        print("❌ Full Traceback:")
-        traceback.print_exc()
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Gemini API error: {str(e)}")
+
+# Endpoint
+@app.post("/api/v1/run")
+def run_query(request: RunRequest):
+    try:
+        # We'll store the direct string answers here, not a list of dictionaries
+        answers = []
+        for question in request.questions:
+            top_chunks = retrieve_top_chunks(question, k=5)
+            answer_text = ask_gemini(question, top_chunks)
+            # Append only the answer string to the list
+            answers.append(answer_text)
+
+        # Return the final dictionary with the "answers" key
+        return {
+            "answers": answers
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

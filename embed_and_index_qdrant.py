@@ -4,13 +4,17 @@ import requests
 from PyPDF2 import PdfReader
 from docx import Document
 import os
-import faiss
 import pickle
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import Distance, VectorParams, PointStruct
 
 load_dotenv()
 api_key = os.getenv("OPENROUTER_API_KEY")
+qdrant_api_key = os.getenv("QDRANT_API_KEY")
+qdrant_host = os.getenv("QDRANT_HOST")
+collection_name = "policy-documents"
 
 # Download and extract text
 def download_and_extract(blob_url: str) -> str:
@@ -45,21 +49,33 @@ def get_embeddings(chunks: list):
     model = SentenceTransformer("all-MiniLM-L6-v2")
     return model.encode(chunks)
 
-# Build FAISS index from text chunks
-def build_faiss_index(chunks: list):
-    embeddings = get_embeddings(chunks)
-    dimension = embeddings.shape[1]
+# Upload to Qdrant
+def upload_to_qdrant(chunks: list, embeddings):
+    client = QdrantClient(
+        url=qdrant_host,
+        api_key=qdrant_api_key,
+    )
 
-    index = faiss.IndexFlatL2(dimension)
-    index.add(embeddings)
+    # Create collection (if not exists)
+    client.recreate_collection(
+        collection_name=collection_name,
+        vectors_config=VectorParams(size=embeddings.shape[1], distance=Distance.COSINE),
+    )
 
+    # Prepare and upload data
+    points = [
+        PointStruct(id=i, vector=embeddings[i], payload={"text": chunks[i]})
+        for i in range(len(chunks))
+    ]
+
+    client.upsert(collection_name=collection_name, points=points)
+
+    # Optional: Save locally for reference
     os.makedirs("data", exist_ok=True)
-    faiss.write_index(index, "data/index.faiss")
-
     with open("data/chunks.pkl", "wb") as f:
         pickle.dump(chunks, f)
 
-    print("FAISS index and chunks saved successfully.")
+    print("Uploaded to Qdrant and saved chunks locally.")
 
 def process_document(blob_url):
     print("Downloading and extracting document...")
@@ -68,8 +84,11 @@ def process_document(blob_url):
     print("Chunking text...")
     chunks = chunk_text(text)
 
-    print("Building index...")
-    build_faiss_index(chunks)
+    print("Generating embeddings...")
+    embeddings = get_embeddings(chunks)
+
+    print("Uploading to Qdrant...")
+    upload_to_qdrant(chunks, embeddings)
 
     print("Done.")
 
