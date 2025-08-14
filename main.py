@@ -54,7 +54,7 @@ class RunRequest(BaseModel):
     questions: list[str]
 
 # --- API Endpoint ---
-@app.post("/api/v1/run")
+@app.post("/api/v1/hackrx/run")
 def run_query(request: RunRequest):
     global index, chunks, last_indexed_url
 
