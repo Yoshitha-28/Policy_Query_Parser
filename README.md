@@ -106,14 +106,12 @@ GEMINI_API_KEY=your_api_key_here
 ```bash
 uvicorn main:app --reload
 ```
-Then open Postman
-```bash
-http://localhost:8000
-```
+
 ## Usage
+Open POSTMAN
 Send a POST request to:
 ```bash
-http://localhost:8000/api/v1/run
+<URL provided in command prompt>/api/v1/hackrx/run
 ```
 with JSON:
 
@@ -130,7 +128,20 @@ with JSON:
 - First request downloads, processes, and indexes the document.
 - Later requests reuse existing indexes for faster responses.
 
+
 ## Demo
+
+### Starting Server
+![Uploading a Policy Document](images/Screenshot%202025-08-14%20193817.png)
+
+### Backend Processing
+![Viewing the Parsed Document](images/Screenshot%202025-08-14%20194206.png)
+
+### Asking a Question
+![Asking a Question](images/Screenshot%202025-08-14%20194225.png)
+
+### Getting the Answer
+![Getting the Answer](images/Screenshot%202025-08-14%20194243.png)
 
 
 ## API Reference
