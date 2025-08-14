@@ -1,86 +1,161 @@
 # Policy Query Parser
-A semantic search tool that lets you upload policy documents (PDF, DOCX, TXT, EML) and ask natural language questions about them. This project uses Sentence-Transformers for embeddings and FAISS for efficient semantic search, allowing you to quickly retrieve relevant information from policy files.
 
-### Features
--  Diverse document types: Supports PDF, DOCX, TXT, and EML documents from any URL.
--  Gemini-powered Q&A: Uses the Gemini API for natural language understanding and generating concise answers based on document context.
--  FAISS similarity search: Employs a highly efficient library for finding the most relevant text chunks.
--  Dynamic indexing: Automatically downloads, chunks, and indexes documents on the fly when a new document URL is provided via the API.
--  FastAPI server: Provides a RESTful API endpoint for seamless integration with other applications.
+**Policy_Query_Parser** is a semantic search tool that allows users to upload policy-related documents (such as PDF, DOCX, TXT, and EML) and ask natural language questions about them. It leverages modern NLP and vector search techniques to deliver efficient and accurate responses.
+---
 
-### Project Structure
+##  Table of Contents
+
+1. [Features](#features)  
+2. [Tech Stack](#tech-stack)  
+3. [Repository Structure](#repository-structure)  
+4. [Getting Started](#getting-started)  
+    - [Prerequisites](#prerequisites)  
+    - [Installation](#installation)  
+    - [Environment Setup](#environment-setup)  
+    - [Run the Server](#run-the-server)  
+5. [Usage](#usage)
+6. [Demo](#demo)
+7. [API Reference](#api-reference)  
+8. [Configuration](#configuration)  
+9. [Future Enhancements](#future-enhancements)  
+10. [License](#license)  
+11. [Author](#author)
+
+---
+
+## Features
+
+- Upload and query across multiple formats: **PDF, DOCX, TXT, EML**  
+- **Semantic embeddings** using Sentence-Transformers (or Gemini embeddings)  
+- **Similarity search** via **FAISS** (or optionally Qdrant)  
+- **Dynamic indexing** of new documents upon upload  
+- **FastAPI-based** server with RESTful interface  
+- **Gemini-powered** Q&A for context-aware replies :contentReference[oaicite:0]{index=0}  
+
+---
+
+## Tech Stack
+
+| Component         | Description                                           |
+|------------------|-------------------------------------------------------|
+| Embeddings       | Sentence-Transformers (or Gemini)                     |
+| Vector Search    | FAISS (and option for Qdrant)                         |
+| API Framework    | FastAPI + Uvicorn                                     |
+| Language         | Python                                                |
+| Environment      | `.env` for secure configuration                       |
+| Storage          | Local directory for indices (`faiss.index`) & chunks (`chunks.pkl`) :contentReference[oaicite:1]{index=1} |
+
+---
+
+## Repository Structure
 ```bash
 Policy_Query_Parser/
-├── main.py                     # The FastAPI application entry point
-├── embed_and_index.py          # Handles downloading, parsing, and indexing documents
-├── retriever_with_llm.py       # Manages context retrieval and LLM interaction
-├── data/                       # Directory for generated files
-  ├── faiss.index             # FAISS index file (generated)
-  └── chunks.pkl              # Pickled text chunks (generated)
-├── requirements.txt            # Project dependencies
-├── .env                        # API keys (DO NOT push to GitHub)
-├── .gitignore                  # Prevents sensitive & unnecessary files from being pushed
-├── README.md                   # Project documentation
-└── venv/                       # Python virtual environment
+├── main.py # Entry point: runs the FastAPI server
+├── embed_and_index.py # Downloads, parses, chunks, indexes docs
+├── retriever_with_llm.py # Handles vector retrieval & LLM context querying
+├── embed_and_index_qdrant.py # (Optional) Qdrant integration
+├── test_client.py # Sample client to test API endpoint
+├── data/
+│ ├── faiss.index # FAISS index (generated)
+│ └── chunks.pkl # Pickled text chunks (generated)
+├── requirements.txt # Dependencies
+├── .env # API key placeholders (ignored by Git)
+├── .gitignore # Avoid sensitive files in commits
+├── render.yaml # (Describe its purpose here if applicable)
+└── venv/ # Python virtual environment
 ```
+## Getting Started
 
-### Setup & Deployment Instructions
-#### 1. Clone the Repository
+### Prerequisites
+
+- Python 3.8+  
+- `git` installed  
+- Access to a Gemini (or equivalent) API key
+
+### Installation
+
 ```bash
 git clone https://github.com/Yoshitha-28/Policy_Query_Parser.git
 cd Policy_Query_Parser
+python -m venv venv
 ```
 
-#### 2. Create and Activate a Virtual Environment
+### Environment Setup
+Activate the virtual environment:
+
+macOS/Linux:
 ```bash
-python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
 source venv/bin/activate
 ```
-#### 3. Create a .env File
-Create a file named .env in the root of the project and add your Gemini API key.
+Windows:
 ```bash
-GEMINI_API_KEY=your_api_key_here
+venv\Scripts\activate
 ```
-Do NOT share this key or commit your .env file to GitHub.
-
-#### 4. Install Required Libraries
-Install all necessary packages from the requirements.txt file.
+### Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
+Create a .env (not committed to the repo):
 
-#### 5. Run the FastAPI Server
-Start the application using Uvicorn. This will make your API available locally at http://localhost:8000.
+```bash
+GEMINI_API_KEY=your_api_key_here
+```
+
+### Run the Server
 ```bash
 uvicorn main:app --reload
 ```
-How to Use the API
-Once the server is running, you can send a POST request to the API to index a document and ask questions.
+Then open Postman
 ```bash
-Endpoint: http://localhost:8000/api/v1/run
+http://localhost:8000
+```
+## Usage
+Send a POST request to:
+```bash
+http://localhost:8000/api/v1/run
+```
+with JSON:
 
-Request Body (JSON):
-
+```bash
 {
-  "documents": "https://example.com/path/to/your/document.pdf",
+  "documents": "https://example.com/policy.pdf",
   "questions": [
     "What is the policy on late payments?",
-    "How do I file a claim?"
+    "How can I file a claim?"
   ]
 }
 ```
-The first time you call the API with a new documents URL, the system will download, process, and index the file. This may take some time.
 
-Subsequent requests with the same URL will use the existing index, resulting in much faster responses.
+- First request downloads, processes, and indexes the document.
+- Later requests reuse existing indexes for faster responses.
 
-You can include multiple questions in a single request, and the API will return a concise answer for each.
+## Demo
 
-### Author
+
+## API Reference
+| Endpoint       | Method | Description                                             |
+|----------------|--------|---------------------------------------------------------|
+| `/api/v1/run`  | POST   | Upload document URL(s) and ask questions. Returns answers. |
+| `/docs`        | GET    | Access interactive API documentation via Swagger UI.    |
+| `/openapi.json`| GET    | Retrieve the OpenAPI schema.                             |
+
+## Configuration
+Use .env to store your GEMINI_API_KEY
+Optionally switch from FAISS to Qdrant via embed_and_index_qdrant.py
+render.yaml (describe if used for deployment, CI/CD, or visualization)
+
+## Future Enhancements
+ - Add authentication/security to API
+ - Support for more document formats or batch uploads
+ - Dockerize the application for containerized deployment
+ - Add caching to reduce latency
+ - Provide better error handling and logging
+ - Optionally switch to vector cloud services like Pinecone, Weaviate, or Qdrant
+
+## License
+This project is licensed under the MIT License. 
+GitHub
+
+## Author
 Yoshitha Maddineni
-
-### License
-This project is licensed under the MIT License.
